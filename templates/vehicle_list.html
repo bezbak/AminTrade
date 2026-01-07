@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1 class="text-2xl font-bold mb-4">Список машин</h1>
+  <form method="post" action="/api/v1/create-vehicle/" class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2 p-3 bg-white rounded shadow">
+    {% csrf_token %}
+    <input type="text" name="number" placeholder="Номер" class="border rounded px-2 py-1" required />
+    <input type="text" name="model_car" placeholder="MODEL CAR" class="border rounded px-2 py-1" required />
+    <input type="number" name="year" placeholder="YEAR" class="border rounded px-2 py-1" />
+    <input type="text" name="vin" placeholder="VIN" class="border rounded px-2 py-1" />
+    <input type="text" name="phone_primary" placeholder="Телефон 1" class="border rounded px-2 py-1" />
+    <input type="text" name="phone_secondary" placeholder="Телефон 2" class="border rounded px-2 py-1" />
+    <select name="responsible" class="border rounded px-2 py-1">
+      <option value="">Ответственный</option>
+      {% for c in contacts %}
+        <option value="{{ c.id }}">{{ c.name }} ({{ c.whatsapp }})</option>
+      {% endfor %}
+    </select>
+    <select name="contacts" multiple class="border rounded px-2 py-1">
+      {% for c in contacts %}
+        <option value="{{ c.id }}">{{ c.name }} ({{ c.whatsapp }})</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded col-span-2 md:col-span-4">Создать машину</button>
+  </form>
+  <form method="get" class="mb-4 flex flex-wrap gap-2 items-end">
+    <input type="text" name="q" value="{{ q }}" placeholder="Поиск по номеру, модели, VIN" class="border rounded px-2 py-1" />
+    <label>С даты:<input type="date" name="date_from" value="{{ date_from }}" class="border rounded px-2 py-1" /></label>
+    <label>По дату:<input type="date" name="date_to" value="{{ date_to }}" class="border rounded px-2 py-1" /></label>
+    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Поиск</button>
+  </form>
+  <form id="vehicle-mass-form" method="post" action="/api/v1/send-mass/">
+    {% csrf_token %}
+    <table class="min-w-full bg-white rounded shadow">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="px-3 py-2"><input type="checkbox" id="select-all-vehicles" /></th>
+          <th class="px-3 py-2">Номер</th>
+          <th class="px-3 py-2">MODEL CAR</th>
+          <th class="px-3 py-2">YEAR</th>
+          <th class="px-3 py-2">VIN</th>
+          <th class="px-3 py-2">Телефон 1</th>
+          <th class="px-3 py-2">Телефон 2</th>
+          <th class="px-3 py-2">Ответственный</th>
+          <th class="px-3 py-2">Контакты</th>
+          <td class="px-3 py-2 text-right"></td>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in vehicles %}
+          <tr class="border-b hover:bg-blue-50">
+            <td class="px-3 py-2 align-top"><input type="checkbox" name="vehicles" value="{{ v.pk }}" class="vehicle-checkbox" /></td>
+            <td class="px-3 py-2">{{ v.number }}</td>
+            <td class="px-3 py-2">{{ v.model_car }}</td>
+            <td class="px-3 py-2">{{ v.year }}</td>
+            <td class="px-3 py-2">{{ v.vin }}</td>
+            <td class="px-3 py-2">{{ v.phone_primary }}</td>
+            <td class="px-3 py-2">{{ v.phone_secondary }}</td>
+            <td class="px-3 py-2">{% if v.responsible %}{{ v.responsible.name }} ({{ v.responsible.whatsapp }}){% else %}<span class="text-gray-400 text-xs">нет</span>{% endif %}</td>
+            <td class="px-3 py-2">
+              {% for c in v.contacts.all %}
+                <span class="inline-block bg-gray-200 rounded px-2 py-1 text-xs mr-1">{{ c.name }} ({{ c.whatsapp }})</span>
+              {% empty %}
+                <span class="text-gray-400 text-xs">нет</span>
+              {% endfor %}
+            </td>
+            <td class="px-3 py-2 text-right">
+              <button type="button" class="text-red-600 hover:underline delete-vehicle-btn" data-id="{{ v.pk }}">Удалить</button>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-gray-400 py-4">Нет машин</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="mt-3 flex justify-end gap-2">
+      <button type="button" id="send-vehicles" class="bg-green-600 text-white px-4 py-2 rounded">Отправить выбранные</button>
+    </div>
+  </form>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const all = document.getElementById('select-all-vehicles')
+      const boxes = document.querySelectorAll('.vehicle-checkbox')
+      all.addEventListener('change', function () {
+        boxes.forEach((b) => (b.checked = all.checked))
+      })
+      document.getElementById('send-vehicles').addEventListener('click', function () {
+        const ids = Array.from(boxes).filter((b) => b.checked).map((b) => b.value)
+        if (!ids.length) return alert('Выберите машины')
+        const formData = new FormData()
+        ids.forEach((id) => formData.append('vehicles', id))
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}')
+        fetch('/api/v1/send-mass/', {
+          method: 'POST',
+          body: formData,
+        })
+          .then((r) => r.json())
+          .then((d) => alert('Отправлено: ' + d.sent))
+          .catch(() => alert('Ошибка отправки'))
+      })
+      document.querySelectorAll('.delete-vehicle-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (!confirm('Удалить машину?')) return
+          const vehicleId = this.getAttribute('data-id')
+          fetch(`/api/v1/delete-vehicle/${vehicleId}/`, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': getCookie('csrftoken')
+            }
+          }).then((response) => {
+            if (response.ok) {
+              this.closest('tr').remove()
+            } else {
+              alert('Ошибка при удалении')
+            }
+          })
+        })
+      })
+      function getCookie(name) {
+        let cookieValue = null
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';')
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim()
+            if (cookie.substring(0, name.length + 1) === name + '=') {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1))
+              break
+            }
+          }
+        }
+        return cookieValue
+      }
+    })
+  </script>
+{% endblock %}

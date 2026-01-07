@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Список контактов</h1>
+<form method="post" action="/api/v1/create-contact/" class="mb-4 flex flex-wrap gap-2 items-end bg-white p-3 rounded shadow">
+    {% csrf_token %}
+    <input type="text" name="name" placeholder="Имя" class="border rounded px-2 py-1" required>
+    <input type="text" name="whatsapp" placeholder="WhatsApp" class="border rounded px-2 py-1" required>
+    <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить контакт</button>
+</form>
+<form method="get" class="mb-4 flex flex-wrap gap-2 items-end">
+    <input type="text" name="q" value="{{ q }}" placeholder="Поиск по имени или WhatsApp" class="border rounded px-2 py-1">
+    <label>С даты: <input type="date" name="date_from" value="{{ date_from }}" class="border rounded px-2 py-1"></label>
+    <label>По дату: <input type="date" name="date_to" value="{{ date_to }}" class="border rounded px-2 py-1"></label>
+    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Поиск</button>
+</form>
+<form id="contact-mass-form" method="post" action="/api/v1/send-mass/">
+    {% csrf_token %}
+    <table class="min-w-full bg-white rounded shadow">
+        <thead>
+            <tr class="bg-gray-100">
+                <th class="px-3 py-2"><input type="checkbox" id="select-all-contacts"></th>
+                <th class="px-3 py-2">Имя</th>
+                <th class="px-3 py-2">WhatsApp</th>
+                <th class="px-3 py-2">Машины</th>
+                <td class="px-3 py-2 text-right"></td>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in contacts %}
+            <tr class="border-b hover:bg-blue-50">
+                <td class="px-3 py-2 align-top"><input type="checkbox" name="contacts" value="{{ c.id }}" class="contact-checkbox"></td>
+                <td class="px-3 py-2">{{ c.name }}</td>
+                <td class="px-3 py-2">{{ c.whatsapp }}</td>
+                <td class="px-3 py-2">
+                    {% for v in c.vehicles.all %}
+                        <span class="inline-block bg-gray-200 rounded px-2 py-1 text-xs mr-1">{{ v.number }}</span>
+                    {% empty %}
+                        <span class="text-gray-400 text-xs">нет</span>
+                    {% endfor %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-gray-400 py-4">Нет контактов</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="mt-3 flex justify-end">
+        <button type="button" id="send-contacts" class="bg-green-600 text-white px-4 py-2 rounded">Отправить выбранным</button>
+    </div>
+</form>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const all = document.getElementById('select-all-contacts')
+        const boxes = document.querySelectorAll('.contact-checkbox')
+        all.addEventListener('change', function () {
+            boxes.forEach((b) => (b.checked = all.checked))
+        })
+        document.getElementById('send-contacts').addEventListener('click', function () {
+            const ids = Array.from(boxes).filter((b) => b.checked).map((b) => b.value)
+            if (!ids.length) return alert('Выберите контакты')
+            const formData = new FormData()
+            ids.forEach((id) => formData.append('contacts', id))
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}')
+            fetch('/api/v1/send-mass/', {
+                method: 'POST',
+                body: formData,
+            })
+                .then((r) => r.json())
+                .then((d) => alert('Отправлено: ' + d.sent))
+                .catch(() => alert('Ошибка отправки'))
+        })
+    })
+</script>
+{% endblock %}

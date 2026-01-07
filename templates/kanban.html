@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+{% block content %}
+  <style>
+    /* Стили для ghost и перемещаемого элемента */
+    .sortable-ghost {
+      opacity: 0 !important; /* ghost полностью исчезает */
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+    }
+    .sortable-chosen {
+      box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.18), 0 1.5px 3px 0 rgba(0, 0, 0, 0.15);
+      background: #e0e7ef;
+      opacity: 0.9;
+      z-index: 50;
+    }
+    .drag-clone {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.95;
+      background: #fff;
+      border-radius: 0.5rem;
+      box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.18), 0 1.5px 3px 0 rgba(0, 0, 0, 0.15);
+      padding: 0.5rem;
+      min-width: 200px;
+      max-width: 320px;
+      transition: none !important;
+      left: 0;
+      top: 0;
+    }
+  </style>
+  <div class="mb-4 flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Канбан-доска</h1>
+    <button onclick="openVehicleModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition">+ Добавить машину</button>
+  </div>
+  <div class="flex space-x-4">
+    <!-- Модальное окно для создания машины -->
+    <div id="vehicleModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-50">
+      <form method="post" action="/api/v1/create-vehicle/" class="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg relative" style="min-width:350px;">
+        {% csrf_token %}
+        <button type="button" onclick="closeVehicleModal()" class="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl">&times;</button>
+        <h2 class="text-xl font-bold mb-4 text-blue-700">Добавить машину</h2>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">Номер машины</label>
+          <input type="text" name="number" class="w-full border rounded px-3 py-2 focus:ring focus:ring-blue-200" required />
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">MODEL CAR</label>
+          <input type="text" name="model_car" class="w-full border rounded px-3 py-2" required />
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">YEAR</label>
+          <input type="number" name="year" class="w-full border rounded px-3 py-2" required />
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">VIN code</label>
+          <input type="text" name="vin" class="w-full border rounded px-3 py-2" required />
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">Телефон 1</label>
+          <input type="text" name="phone_primary" class="w-full border rounded px-3 py-2" />
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">Телефон 2</label>
+          <input type="text" name="phone_secondary" class="w-full border rounded px-3 py-2" />
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">Ответственный</label>
+          <select name="responsible" class="w-full border rounded px-3 py-2">
+            <option value="">-- не выбран --</option>
+            {% for c in contacts %}
+              <option value="{{ c.id }}">{{ c.name }} ({{ c.whatsapp }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1">Контакты для рассылки</label>
+          <select name="contacts" multiple class="w-full border rounded px-3 py-2 h-24" id="vehicle-contacts-select">
+            {% for c in contacts %}
+              <option value="{{ c.id }}">{{ c.name }} ({{ c.whatsapp }})</option>
+            {% endfor %}
+          </select>
+          <span class="text-xs text-gray-500">Не более 2 контактов</span>
+        </div>
+        <div class="flex justify-end mt-4">
+          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow">Сохранить</button>
+        </div>
+      </form>
+    </div>
+    <script>
+      function openVehicleModal() {
+        document.getElementById('vehicleModal').classList.remove('hidden')
+      }
+      function closeVehicleModal() {
+        document.getElementById('vehicleModal').classList.add('hidden')
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        const select = document.getElementById('vehicle-contacts-select')
+        select.addEventListener('change', function () {
+          const chosen = Array.from(this.selectedOptions)
+          if (chosen.length > 2) {
+            chosen[chosen.length - 1].selected = false
+            alert('Можно выбрать не более 2 контактов')
+          }
+        })
+      })
+    </script>
+    {% for stage in stages %}
+      <div class="w-1/4 bg-gray-100 rounded p-2" data-stage="{{ stage.id }}">
+        <h2 class="font-bold mb-2">{{ stage.name }}</h2>
+        <form method="post" action="/api/v1/update-stage-template/{{ stage.id }}/" class="space-y-2 mb-2">
+          {% csrf_token %}
+          <textarea name="message_template" class="w-full border rounded px-2 py-1 text-sm" rows="2" placeholder="Текст рассылки для этапа">{{ stage.message_template }}</textarea>
+          <button type="submit" class="text-xs text-blue-600 underline">Сохранить текст</button>
+        </form>
+        <div class="min-h-[100px] space-y-2" id="stage-{{ stage.id }}">
+          {% for container in stage.container_set.all %}
+            <div class="bg-white p-2 rounded shadow cursor-move" draggable="true" data-container="{{ container.id }}">
+              <div class="font-bold">{{ container.name }}</div>
+              {% for cv in container.containervehicle_set.all %}
+                <div class="text-xs text-gray-500">Машина: {{ cv.vehicle.number }} ({{ cv.vehicle.model_car }})</div>
+                <div class="text-xs text-gray-500">Ответственный: {% if cv.responsible %}{{ cv.responsible.name }}{% else %}не назначен{% endif %}</div>
+              {% empty %}
+                <div class="text-xs text-gray-400">Машин нет</div>
+              {% endfor %}
+              <div class="text-xs text-gray-500">Ответственный контейнера: {{ container.responsible.name }}</div>
+              <div class="text-xs text-gray-500">Место (этап): {{ container.stage.name }}</div>
+              <div class="text-xs text-gray-500">Конечный пункт: {{ container.destination|default:'-' }}</div>
+              <div class="text-xs text-gray-500">Прибытие Бишкек: {{ container.arrival_time_bishkek|date:'Y-m-d H:i' }}</div>
+              <div class="text-xs text-gray-500">Прибытие Ош: {{ container.arrival_time_osh|date:'Y-m-d H:i' }}</div>
+              <div class="text-xs text-gray-500">Через Эркештам: {{ container.transit_erkishtam|yesno:'Да,Нет' }}</div>
+              <div class="text-xs text-gray-500">Дата этапа: {{ container.arrival_date|date:'Y-m-d' }}</div>
+            </div>
+          {% endfor %}
+        </div>
+        <!-- Кнопка для открытия формы создания контейнера -->
+        <button onclick="openContainerForm({{ stage.id }})" class="mt-2 bg-blue-500 text-white px-2 py-1 rounded text-xs">+ Контейнер</button>
+      </div>
+    {% endfor %}
+    <!-- Форма для добавления новой колонки -->
+    <div class="w-1/4 bg-gray-200 rounded p-2 flex flex-col justify-center items-center">
+      <form method="post" action="/api/v1/create-stage/" class="w-full flex flex-col items-center space-y-2">
+        {% csrf_token %}
+        <input type="text" name="name" placeholder="Название колонки" class="w-full border rounded px-2 py-1" required />
+        <button type="submit" class="bg-green-500 text-white px-2 py-1 rounded w-full">+ Колонка</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Форма создания контейнера (скрыта по умолчанию) -->
+  <div id="containerFormModal" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center hidden z-50">
+    <form method="post" action="/api/v1/create-container/" class="bg-white p-6 rounded space-y-4 w-[860px] max-w-5xl">
+      {% csrf_token %}
+      <input type="hidden" name="stage" id="containerFormStage" />
+      <div class="flex items-center gap-3 text-sm font-semibold">
+        <span id="stepIndicator" class="bg-blue-100 text-blue-700 px-3 py-1 rounded">Шаг 1 из 2</span>
+        <span class="text-gray-500" id="stepLabel">Данные контейнера</span>
+      </div>
+      <div class="space-y-4">
+        <div class="step-block" data-step="1">
+          <div>
+            <label class="block text-sm">Название контейнера</label>
+            <input type="text" name="name" class="w-full border rounded px-3 py-2" required />
+          </div>
+          <div>
+            <label class="block text-sm">Ответственный</label>
+            <select name="responsible" class="w-full border rounded px-3 py-2" required>
+              {% for c in contacts %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm">Конечный пункт (Stage)</label>
+            <select name="destination" class="w-full border rounded px-3 py-2">
+              <option value="">Выберите конечный пункт</option>
+              {% for s in stages %}
+                <option value="{{ s.name }}">{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="text-sm flex items-center gap-2"><input type="checkbox" name="mute_client" class="rounded" /> Не отправлять клиенту</label>
+            <label class="text-sm flex items-center gap-2"><input type="checkbox" name="mute_manager" class="rounded" /> Не отправлять менеджеру</label>
+            <label class="text-sm flex items-center gap-2 col-span-2"><input type="checkbox" name="transit_erkishtam" class="rounded" /> Маршрут через Эркештам перед Ош</label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm">Прибытие в Бишкек</label>
+              <input type="datetime-local" name="arrival_time_bishkek" class="w-full border rounded px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-sm">Прибытие в Ош</label>
+              <input type="datetime-local" name="arrival_time_osh" class="w-full border rounded px-3 py-2" />
+            </div>
+          </div>
+        </div>
+        <div class="step-block hidden" data-step="2">
+          <div id="vehicles-container" class="space-y-3">
+            <label class="block text-sm">Машины</label>
+            <div class="space-y-2">
+              <div class="vehicle-fields grid grid-cols-2 gap-2">
+                <input type="text" name="vehicle_number[]" placeholder="Номер" class="border rounded px-2 py-1" required />
+                <input type="text" name="vehicle_model[]" placeholder="MODEL CAR" class="border rounded px-2 py-1" required />
+                <input type="number" name="vehicle_year[]" placeholder="YEAR" class="border rounded px-2 py-1" required />
+                <input type="text" name="vehicle_vin[]" placeholder="VIN code" class="border rounded px-2 py-1" required />
+                <input type="text" name="vehicle_phone_primary[]" placeholder="Телефон 1" class="border rounded px-2 py-1" />
+                <input type="text" name="vehicle_phone_secondary[]" placeholder="Телефон 2" class="border rounded px-2 py-1" />
+                <select name="vehicle_responsible[]" class="border rounded px-2 py-1 col-span-2">
+                  <option value="">Ответственный (по машине)</option>
+                  {% for c in contacts %}
+                    <option value="{{ c.id }}">{{ c.name }} ({{ c.whatsapp }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <button type="button" onclick="addVehicleFields()" class="mt-2 bg-gray-300 px-3 py-2 rounded text-xs">+ Еще машина</button>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        function addVehicleFields() {
+          const container = document.querySelector('#vehicles-container .space-y-2')
+          const div = document.createElement('div')
+          div.className = 'vehicle-fields grid grid-cols-2 gap-2'
+          div.innerHTML = `
+                        <input type="text" name="vehicle_number[]" placeholder="Номер" class="border rounded px-2 py-1 w-full" required>
+                        <input type="text" name="vehicle_model[]" placeholder="MODEL CAR" class="border rounded px-2 py-1 w-full" required>
+                        <input type="number" name="vehicle_year[]" placeholder="YEAR" class="border rounded px-2 py-1 w-full" required>
+                        <input type="text" name="vehicle_vin[]" placeholder="VIN code" class="border rounded px-2 py-1 w-full" required>
+                        <input type="text" name="vehicle_phone_primary[]" placeholder="Телефон 1" class="border rounded px-2 py-1 w-full">
+                        <input type="text" name="vehicle_phone_secondary[]" placeholder="Телефон 2" class="border rounded px-2 py-1 w-full">
+                        <select name="vehicle_responsible[]" class="border rounded px-2 py-1 col-span-2 w-full">
+                          <option value="">Ответственный (по машине)</option>
+                          {% for c in contacts %}
+                            <option value="{{ c.id }}">{{ c.name }} ({{ c.whatsapp }})</option>
+                          {% endfor %}
+                        </select>
+                        <button type="button" onclick="this.parentElement.remove()" class="text-red-500 col-span-2 text-left">✕ Удалить</button>
+                    `
+          container.appendChild(div)
+        }
+      </script>
+      <div class="flex justify-between items-center pt-2">
+        <button type="button" onclick="closeContainerForm()" class="px-3 py-2 rounded bg-gray-200">Отмена</button>
+        <div class="flex gap-2">
+          <button type="button" id="prevStep" class="px-3 py-2 rounded bg-gray-200 hidden" onclick="switchStep(-1)">Назад</button>
+          <button type="button" id="nextStep" class="px-3 py-2 rounded bg-blue-500 text-white" onclick="switchStep(1)">Далее</button>
+          <button type="submit" id="submitContainer" class="px-3 py-2 rounded bg-green-600 text-white hidden">Создать</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script>
+    let dragClone = null
+    let dragging = false
+    let lastEvt = null
+    
+    function moveDragClone(e) {
+      if (dragClone && dragging) {
+        dragClone.style.left = e.clientX - dragClone.offsetWidth / 2 + 'px'
+        dragClone.style.top = e.clientY - dragClone.offsetHeight / 2 + 'px'
+      }
+    }
+    
+    document.querySelectorAll('[id^="stage-"]').forEach(function (el) {
+      new Sortable(el, {
+        group: 'kanban',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onStart: function (evt) {
+          dragging = true
+          // Создаём клон карточки и прикрепляем к курсору
+          const rect = evt.item.getBoundingClientRect()
+          dragClone = evt.item.cloneNode(true)
+          dragClone.classList.add('drag-clone')
+          dragClone.style.width = rect.width + 'px'
+          dragClone.style.left = evt.originalEvent.clientX - rect.width / 2 + 'px'
+          dragClone.style.top = evt.originalEvent.clientY - rect.height / 2 + 'px'
+          document.body.appendChild(dragClone)
+    
+          document.addEventListener('mousemove', moveDragClone)
+        },
+        onEnd: function (evt) {
+          dragging = false
+          if (dragClone) {
+            dragClone.remove()
+            dragClone = null
+          }
+          document.removeEventListener('mousemove', moveDragClone)
+    
+          const containerId = evt.item.dataset.container
+          const newStageId = evt.to.parentElement.dataset.stage
+          fetch('/api/v1/move-container/', {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': '{{ csrf_token }}',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ container_id: containerId, stage_id: newStageId })
+          })
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.status !== 'ok') alert('Ошибка!')
+            })
+        },
+        onMove: function (evt, originalEvent) {
+          // Сохраняем последнее событие мыши для moveDragClone
+          lastEvt = originalEvent
+        }
+      })
+    })
+    
+    // Для плавности: если мышь покидает окно, клон исчезает
+    window.addEventListener('mouseleave', function () {
+      if (dragClone) {
+        dragClone.remove()
+        dragClone = null
+      }
+      dragging = false
+      document.removeEventListener('mousemove', moveDragClone)
+    })
+    
+    function openContainerForm(stageId) {
+      document.getElementById('containerFormStage').value = stageId
+      document.getElementById('containerFormModal').classList.remove('hidden')
+      setStep(1)
+    }
+    function closeContainerForm() {
+      document.getElementById('containerFormModal').classList.add('hidden')
+    }
+
+    let currentStep = 1
+    function setStep(step) {
+      currentStep = step
+      document.querySelectorAll('.step-block').forEach((block) => {
+        block.classList.toggle('hidden', parseInt(block.dataset.step) !== step)
+      })
+      document.getElementById('prevStep').classList.toggle('hidden', step === 1)
+      document.getElementById('nextStep').classList.toggle('hidden', step === 2)
+      document.getElementById('submitContainer').classList.toggle('hidden', step !== 2)
+      document.getElementById('stepIndicator').textContent = 'Шаг ' + step + ' из 2'
+      document.getElementById('stepLabel').textContent = step === 1 ? 'Данные контейнера' : 'Машины'
+    }
+    function switchStep(delta) {
+      const next = currentStep + delta
+      if (next < 1 || next > 2) return
+      setStep(next)
+    }
+  </script>
+{% endblock %}

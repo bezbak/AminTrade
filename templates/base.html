@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Kanban</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto py-6">
+        {% if user.is_authenticated %}
+            <nav class="mb-6 flex items-center justify-between">
+                <div class="flex gap-4">
+                    <a href="/" class="font-semibold text-blue-700 hover:underline">Канбан</a>
+                    <a href="/vehicles/" class="font-semibold text-blue-700 hover:underline">Машины</a>
+                    <a href="/contacts/" class="font-semibold text-blue-700 hover:underline">Контакты</a>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-gray-600">{{ user.username }}</span>
+                    <a href="{% url 'logout' %}" class="text-blue-500 hover:underline">Выйти</a>
+                </div>
+            </nav>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

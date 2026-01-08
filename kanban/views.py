@@ -251,6 +251,7 @@ def send_to_contacts_and_numbers(message, vehicle, container=None):
     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
     skip_client = container.mute_client if container else False
     skip_manager = container.mute_manager if container else False
+    print('Message to send:', message)
     if not skip_client:
         for contact in vehicle.contacts.all():
             print('Sending to contact:', contact.name, contact.whatsapp)

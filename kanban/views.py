@@ -4,8 +4,7 @@ from django.conf import settings
 from twilio.rest import Client
 import json
 from django.utils import timezone
-from .models import Container, PipelineStage, Vehicle, Contact, WhatsAppAccount, Text, Messages
-from .models import ContainerVehicle
+from .models import CallBack, Container, PipelineStage, Vehicle, Contact, WhatsAppAccount, Text, Messages, ContainerVehicle
 import threading
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
@@ -371,6 +370,21 @@ def twilio_webhook(request):
         </Response>
         """.format(body, from_number)
         Messages.objects.create(from_number=from_number, content=body)
+        return HttpResponse(response, content_type='text/xml')
+    return HttpResponse("Only POST requests are accepted.", status=405)
+
+@csrf_exempt
+def twilio_call(request):
+    if request.method == 'POST':
+        from_number = request.POST.get('From')
+        body = request.POST.get('Body')
+        response = """
+        <Response>
+            <Message>Received: {}</Message>
+            <Message>from: {}</Message>
+        </Response>
+        """.format(body, from_number)
+        CallBack.objects.create(from_number=from_number, content=body)
         return HttpResponse(response, content_type='text/xml')
     return HttpResponse("Only POST requests are accepted.", status=405)
 

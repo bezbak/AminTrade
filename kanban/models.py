@@ -89,3 +89,12 @@ class Messages(models.Model):
 
     def __str__(self):
         return f"Message for {self.content[:20]} at {self.timestamp}"
+
+
+class CallBack(models.Model):
+    from_number = models.CharField(max_length=20)
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Callback from {self.from_number} at {self.timestamp}"

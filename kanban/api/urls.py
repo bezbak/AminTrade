@@ -15,4 +15,5 @@ urlpatterns = [
     path('delete-vehicle/<int:pk>/', views.delete_vehicle, name='api_delete_vehicle'),
     path('delete-contact/<int:pk>/', views.delete_contact, name='api_delete_contact'),
     path('twilio-webhook/', views.twilio_webhook, name='api_twilio_webhook'),
+    path('twilio-call/', views.twilio_call, name='api_twilio_call'),
 ]

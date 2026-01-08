@@ -384,7 +384,9 @@ def twilio_call(request):
             <Message>from: {}</Message>
         </Response>
         """.format(body, from_number)
-        CallBack.objects.create(from_number=from_number, content=body)
+        print(request.POST)
+        print(request.POST.get('Body'))
+        CallBack.objects.create(from_number='tedAd', content='fesaf')
         return HttpResponse(response, content_type='text/xml')
     return HttpResponse("Only POST requests are accepted.", status=405)
 

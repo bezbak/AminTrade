@@ -130,7 +130,8 @@ def create_container(request):
                 year=year,
                 vin=vin,
                 phone_primary=primary_phones.pop(0) if primary_phones else '',
-                phone_secondary=secondary_phones.pop(0) if secondary_phones else '',
+                phone_secondary=secondary_phones.pop(
+                    0) if secondary_phones else '',
             )
             resp_id = None
             if vehicle_responsibles:
@@ -191,8 +192,10 @@ def move_container(request):
         container.stage = new_stage
         container.arrival_date = timezone.now()
         container.save()
-        threading.Timer(3, send_whatsapp_notification, args=[container.id]).start()
-        return JsonResponse({'status': 'ok'})
+        print('Scheduling WhatsApp notifications for container', container.id)
+        threading.Timer(3, send_whatsapp_notification,
+                        args=[container.id]).start()
+        return JsonResponse({'status': 'ok', "data": data})
     return JsonResponse({'status': 'error'}, status=400)
 
 
@@ -200,16 +203,21 @@ def send_whatsapp_notification(container_id):
     container = Container.objects.get(id=container_id)
     for vehicle in container.vehicles.all():
         message = build_message(container, vehicle)
+        print('Sending WhatsApp message for container',
+              container.id, 'to vehicle', vehicle.id)
         send_to_contacts_and_numbers(message, vehicle, container)
 
 
 def build_message(container, vehicle):
-    template_ru = (container.stage.message_template_ru or container.stage.message_template or '').strip()
+    template_ru = (
+        container.stage.message_template_ru or container.stage.message_template or '').strip()
     template_kg = (container.stage.message_template_kg or '').strip()
-    text_obj = container.texts.order_by('-id').first() if hasattr(container, 'texts') else None
+    text_obj = container.texts.order_by(
+        '-id').first() if hasattr(container, 'texts') else None
     fallback = text_obj.content if text_obj else ''
     rendered_ru = render_tokens(template_ru or fallback, container, vehicle)
-    rendered_kg = render_tokens(template_kg, container, vehicle) if template_kg else ''
+    rendered_kg = render_tokens(
+        template_kg, container, vehicle) if template_kg else ''
     return rendered_ru + ('\n\n' + rendered_kg if rendered_kg else '')
 
 
@@ -235,7 +243,8 @@ def render_tokens(template, container, vehicle):
         rendered = rendered.replace('{{' + key + '}}', str(value))
     # Handle {=...:TITLE} style
     rendered = rendered.replace('{=System:Date}', replacements['System:Date'])
-    rendered = rendered.replace('{=A79665_42333_75296_53691:TITLE}', vehicle.model_car or vehicle.number)
+    rendered = rendered.replace(
+        '{=A79665_42333_75296_53691:TITLE}', vehicle.model_car or vehicle.number)
     return rendered
 
 
@@ -245,6 +254,7 @@ def send_to_contacts_and_numbers(message, vehicle, container=None):
     skip_manager = container.mute_manager if container else False
     if not skip_client:
         for contact in vehicle.contacts.all():
+            print('Sending to contact:', contact.name, contact.whatsapp)
             if contact.whatsapp:
                 try:
                     client.messages.create(
@@ -255,6 +265,7 @@ def send_to_contacts_and_numbers(message, vehicle, container=None):
                 except Exception:
                     pass
         for phone in [vehicle.phone_primary, vehicle.phone_secondary]:
+            print('Sending to phone:', phone)
             if phone:
                 try:
                     client.messages.create(
@@ -278,16 +289,21 @@ def send_to_contacts_and_numbers(message, vehicle, container=None):
 @login_required
 @require_POST
 def send_mass_messages(request):
-    vehicle_ids = request.POST.getlist('vehicles[]') or request.POST.getlist('vehicles')
-    contact_ids = request.POST.getlist('contacts[]') or request.POST.getlist('contacts')
-    vehicles = list(Vehicle.objects.filter(id__in=vehicle_ids)) if vehicle_ids else []
-    contacts = list(Contact.objects.filter(id__in=contact_ids)) if contact_ids else []
+    vehicle_ids = request.POST.getlist(
+        'vehicles[]') or request.POST.getlist('vehicles')
+    contact_ids = request.POST.getlist(
+        'contacts[]') or request.POST.getlist('contacts')
+    vehicles = list(Vehicle.objects.filter(
+        id__in=vehicle_ids)) if vehicle_ids else []
+    contacts = list(Contact.objects.filter(
+        id__in=contact_ids)) if contact_ids else []
     total_sent = 0
     if not vehicles and contacts:
         for contact in contacts:
             vehicle = contact.vehicles.order_by('-id').first()
             container = get_latest_container(vehicle) if vehicle else None
-            message = build_message(container, vehicle) if container and vehicle else 'Обновление по заказу'
+            message = build_message(
+                container, vehicle) if container and vehicle else 'Обновление по заказу'
             if contact.whatsapp:
                 try:
                     Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN).messages.create(
@@ -301,8 +317,10 @@ def send_mass_messages(request):
         return JsonResponse({'status': 'ok', 'sent': total_sent})
     for vehicle in vehicles:
         container = get_latest_container(vehicle)
-        message = build_message(container, vehicle) if container else f"Информация по машине {vehicle.number} ({vehicle.model_car})"
-        target_contacts = contacts if contacts else list(vehicle.contacts.all())
+        message = build_message(
+            container, vehicle) if container else f"Информация по машине {vehicle.number} ({vehicle.model_car})"
+        target_contacts = contacts if contacts else list(
+            vehicle.contacts.all())
         for contact in target_contacts:
             if contact.whatsapp:
                 try:
